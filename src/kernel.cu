@@ -40,6 +40,10 @@ __device__ inline void texture_map(const Vertex &vt1, const Vertex &vt2, const V
 
 }
 
+__device__ inline void printVertex(Vertex vertex){
+    printf("(%f, %f, %f)", vertex.x, vertex.y, vertex.z);
+}
+
 __device__ inline void printBuffers(Buffers buffers){
     printf("texture_size: %d\n", buffers.texture_size);
 
@@ -105,7 +109,7 @@ __device__ inline void draw(uchar4 *frame, const unsigned int idx, const unsigne
     Vertex point = camera.getPoint(width, height, x, y);
     
     unsigned int texture;
-    unsigned int vertices[6];
+    unsigned int vertices[7];
     float closest = -1;
     for(unsigned int i = 0; i < buffers.renderer_count; i++){
         Renderer renderer = buffers.renderer_buffer[i];
@@ -154,6 +158,8 @@ __device__ inline void draw(uchar4 *frame, const unsigned int idx, const unsigne
                     vertices[4] = model.vertex_start + face.vt2;
                     vertices[5] = model.vertex_start + face.vt3;
 
+                    vertices[6] = model.normal_start + face.vn;
+
                     texture = renderer.texture;
                     break;
                 }
@@ -163,32 +169,8 @@ __device__ inline void draw(uchar4 *frame, const unsigned int idx, const unsigne
 
     if(closest != -1){
         /*
-            https://mathworld.wolfram.com/MatrixInverse.html
-            B = [
-                v1.x v2.x v3.x
-                v1.y v2.y v3.y
-                v1.z v2.z v3.z
-            ]
-
-            |B| = (
-                  (v1.x * ((v2.y * v3.z) - (v3.y * v2.z))) - (v2.x * ((v1.y * v3.z) - (v3.y * v1.z))) + (v3.x * ((v1.y * v2.z) - (v2.y * v1.z)))
-                - (v1.y * ((v2.x * v3.z) - (v3.x * v2.z))) + (v2.y * ((v1.x * v3.z) - (v3.x * v1.z))) - (v3.y * ((v1.x * v2.z) - (v2.x * v1.z)))
-                + (v1.z * ((v2.x * v3.y) - (v3.x * v2.y))) - (v2.z * ((v1.x * v3.y) - (v3.x * v1.y))) + (v3.z * ((v1.x * v2.y) - (v2.x * v1.y)))
-            )
-
-            B^-1 = [
-                ((v2.y * v3.z) - (v3.y * v2.z)) ((v3.x * v2.z) - (v2.x * v3.z)) ((v2.x * v3.y) - (v3.x * v2.y))
-                ((v3.y * v1.z) - (v1.y * v3.z)) ((v1.x * v3.z) - (v3.x * v1.z)) ((v3.x * v1.y) - (v1.x * v3.y))
-                ((v1.y * v2.z) - (v2.y * v1.z)) ((v2.x * v1.z) - (v1.x * v2.z)) ((v1.x * v2.y) - (v2.x * v1.y))
-            ] / |B|
-
-            B' = [
-                vt1.x vt2.x vt3.x
-                vt1.y vt2.y vt3.y
-                vt1.z vt2.z vt3.z
-            ]
-
-            B'B^-1h = the point in space
+            working out for triangle mapping done here:
+            https://www.desmos.com/calculator/xkip2fenoy
         */
 
         Vertex v1 = buffers.vertex_buffer[vertices[0]];
@@ -198,38 +180,32 @@ __device__ inline void draw(uchar4 *frame, const unsigned int idx, const unsigne
         Vertex vt2 = buffers.texture_vertex_buffer[vertices[4]];
         Vertex vt3 = buffers.texture_vertex_buffer[vertices[5]];
 
-        Vertex hit = point * closest;
+        Vertex hit = camera.position + (point * closest);
 
-        float detB = (
-              (v1.x * ((v2.y * v3.z) - (v3.y * v2.z))) - (v2.x * ((v1.y * v3.z) - (v3.y * v1.z))) + (v3.x * ((v1.y * v2.z) - (v2.y * v1.z)))
-            - (v1.y * ((v2.x * v3.z) - (v3.x * v2.z))) + (v2.y * ((v1.x * v3.z) - (v3.x * v1.z))) - (v3.y * ((v1.x * v2.z) - (v2.x * v1.z)))
-            + (v1.z * ((v2.x * v3.y) - (v3.x * v2.y))) - (v2.z * ((v1.x * v3.y) - (v3.x * v1.y))) + (v3.z * ((v1.x * v2.y) - (v2.x * v1.y)))
-        );
+        Vertex vu = v2 - v1;
+        Vertex vv = v3 - v1;
+        Vertex vw = buffers.normal_buffer[vertices[6]];
 
-        float invB11, invB12, invB13,
-              invB21, invB22, invB23,
-              invB31, invB32, invB33;
+        Vertex vuxvv = vu.cross(vv);
+        Vertex vvxvw = vv.cross(vw);
+        Vertex vwxvu = vw.cross(vu);
 
-        invB11 = ((v2.y * v3.z) - (v3.y * v2.z)); invB12 = ((v3.x * v2.z) - (v2.x * v3.z)); invB13 = ((v2.x * v3.y) - (v3.x * v2.y));
-        invB21 = ((v3.y * v1.z) - (v1.y * v3.z)); invB22 = ((v1.x * v3.z) - (v3.x * v1.z)); invB23 = ((v3.x * v1.y) - (v1.x * v3.y));
-        invB31 = ((v1.y * v2.z) - (v2.y * v1.z)); invB32 = ((v2.x * v1.z) - (v1.x * v2.z)); invB33 = ((v1.x * v2.y) - (v2.x * v1.y));
+        float u = ((hit - v1) * vvxvw) / (vu * vvxvw);
+        float v = ((hit - v1) * vwxvu) / (vv * vwxvu);
+        float w = ((hit - v1) * vuxvv) / (vw * vuxvv);
 
-        invB11 /= detB; invB12 /= detB; invB13 /= detB;
-        invB21 /= detB; invB22 /= detB; invB23 /= detB;
-        invB31 /= detB; invB32 /= detB; invB33 /= detB;
+        Vertex vtu = vt2 - vt1;
+        Vertex vtv = vt3 - vt1;
+        Vertex vtw = Vertex({0, 0, 1}) - vt1;
 
-        float T11, T12, T13,
-              T21, T22, T23;
-        //    T31, T32, T33;
-        
-        T11 = (vt1.x * invB11) + (vt2.x * invB21) + (vt3.x * invB31); T12 = (vt1.x * invB12) + (vt2.x * invB22) + (vt3.x * invB32); T13 = (vt1.x * invB13) + (vt2.x * invB23) + (vt3.x * invB33);
-        T21 = (vt1.y * invB11) + (vt2.y * invB21) + (vt3.y * invB31); T22 = (vt1.y * invB12) + (vt2.y * invB22) + (vt3.y * invB32); T23 = (vt1.y * invB13) + (vt2.y * invB23) + (vt3.y * invB33);
-        // T31 = (vt1.z * invB11) + (vt2.z * invB21) (vt3.z * invB31); T32 = (vt1.z * invB12) + (vt2.z * invB22) (vt3.z * invB32); T33 = (vt1.z * invB13) + (vt2.z * invB23) (vt3.z * invB33);
+        float mapped_x = (vtu.x * u) + (vtv.x * v) + (vtw.x * w) + vt1.x;
+        float mapped_y = (vtu.y * u) + (vtv.y * v) + (vtw.y * w) + vt1.y;
 
-        float mapped_x = (hit.x * T11) + (hit.y * T12) + (hit.z * T13);
-        float mapped_y = (hit.x * T21) + (hit.y * T22) + (hit.z * T23);
+        if(mapped_x < 1 && mapped_x > 0 && mapped_y < 1 && mapped_y > 0){
+            unsigned int tm = (texture * buffers.texture_size * buffers.texture_size) + (buffers.texture_size * (unsigned int)(buffers.texture_size * mapped_y)) + (unsigned int)(buffers.texture_size * mapped_x);
 
-        frame[idx] = buffers.texture_buffer[(unsigned int)((texture * buffers.texture_size * buffers.texture_size) + (buffers.texture_size * buffers.texture_size * mapped_y) + (buffers.texture_size * mapped_x))];
+            frame[idx] = buffers.texture_buffer[tm];
+        }
     }else{
         frame[idx].x = point.x * 255;
         frame[idx].y = point.y * 255;
