@@ -5,36 +5,6 @@
 
 using namespace RTX;
 
-__device__ inline void make_transformation(const Vertex &vt1, const Vertex &vt2, const Vertex &vt3, const Vertex &vt4, const Vertex &v1, const Vertex &v2, const Vertex &v3, const Vertex &v4, float *out){
-    /*
-        https://stackoverflow.com/questions/3780493/map-points-between-two-triangles-in-3d-space
-
-        A = [
-            v1.x v1.y v1.z 1
-            v2.x v2.y v2.z 1
-            v3.x v3.y v3.z 1
-            v4.x v4.y v4.z 1
-        ]
-
-        https://semath.info/src/inverse-cofactor-ex4.html
-
-        A^-1 = A~ / |A|
-
-        A~_ij = (-1) ^ (i + j) * |M_ij|
-
-        M_ij is the matrix multiplied by A_ij when determinining the determinant
-
-        A = [
-            vt1.x vt1.y vt1.z 1
-            vt2.x vt2.y vt2.z 1
-            vt3.x vt3.y vt3.z 1
-            vt4.x vt4.y vt4.z 1
-        ]
-
-        T = A'A^-1
-    */
-}
-
 __device__ inline void texture_map(const Vertex &vt1, const Vertex &vt2, const Vertex &vt3, const Vertex &v1, const Vertex &v2, const Vertex &v3, const Vertex &hit){
 
 
@@ -133,6 +103,7 @@ __device__ inline void draw(uchar4 *frame, const unsigned int idx, const unsigne
 
                 float dist = (v1 - camera.position) * vn / dist_den;
                 if(dist > 0 && (dist < closest || closest == -1)){
+                    //TODO: maybe just check where the hit is on the texture (u, v, w < 1 & > 0 ?)
                     Vertex hit = point * dist + camera.position;
 
                     Vertex v2 = model_vertices[face.v2];
@@ -161,7 +132,6 @@ __device__ inline void draw(uchar4 *frame, const unsigned int idx, const unsigne
                     vertices[6] = model.normal_start + face.vn;
 
                     texture = renderer.texture;
-                    break;
                 }
             }
         }
