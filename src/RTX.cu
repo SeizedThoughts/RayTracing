@@ -321,6 +321,7 @@ __host__ __device__ RTX::Vertex RTX::Camera::getPoint(){
 
 //https://www.euclideanspace.com/maths/geometry/rotations/conversions/eulerToQuaternion/steps/index.htm
 __host__ __device__ RTX::Vertex RTX::Camera::getPoint(const int width, const int height, const int x, const int y){
+    //TODO: looking down makes things wide :)
     //only perspective right now
     Vertex t = rotation.rotateInPlace(Quaternion({cosf(y_fov * 0.25), sinf(y_fov * 0.25), 0, 0}).rotateInPlace((Vertex&)Vertex({0, 0, 1}))).normalize();
     Vertex l = rotation.rotateInPlace(Quaternion({cosf(x_fov * 0.25), 0, sinf(x_fov * 0.25), 0}).rotateInPlace((Vertex&)Vertex({0, 0, 1}))).normalize();
@@ -371,6 +372,8 @@ void RTX::makeBuffers(
     unsigned int max_texture_count,
     unsigned int max_renderer_count
 ){
+    //TODO: add support for internally managed memory
+    //i believe that this will only be needed for vertices
     buffers.texture_size = 512;
 
     buffers.vertex_count = 0;
@@ -521,19 +524,13 @@ int RTX::load(const char *file_path){
                             v[1]--;
                             v[2]--;
 
-                            /*
-                                https://stackoverflow.com/questions/3780493/map-points-between-two-triangles-in-3d-space
-                                v4 = v1 + (v2 - v1) x (v3 - v1)
-                                vt4 = vt1 + (vt2 - vt1) x (vt3 - vt1)
-                            */
-
                             buffers.normal_buffer[buffers.normal_count] = (buffers.vertex_buffer[v[1]] - buffers.vertex_buffer[v[0]]).cross(buffers.vertex_buffer[v[2]] - buffers.vertex_buffer[v[0]]);
 
                             buffers.vertex_buffer[buffers.vertex_count] = buffers.vertex_buffer[v[0]] + buffers.normal_buffer[buffers.normal_count];
                             
                             buffers.normal_buffer[buffers.normal_count].normalize();
 
-                            buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], (int)(buffers.vertex_count++), -1, -1, -1, -1, (int)(buffers.normal_count++)};
+                            buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], -1, -1, -1, (int)(buffers.normal_count++)};
                             break;
                         case '/':
                             if(obj.peek() == '/'){
@@ -556,15 +553,9 @@ int RTX::load(const char *file_path){
                                     vn[0] = buffers.normal_count++;
                                 }
 
-                                /*
-                                    https://stackoverflow.com/questions/3780493/map-points-between-two-triangles-in-3d-space
-                                    v4 = v1 + (v2 - v1) x (v3 - v1)
-                                    vt4 = vt1 + (vt2 - vt1) x (vt3 - vt1)
-                                */
-
                                 buffers.vertex_buffer[buffers.vertex_count] = buffers.vertex_buffer[v[0]] + (buffers.vertex_buffer[v[1]] - buffers.vertex_buffer[v[0]]).cross(buffers.vertex_buffer[v[2]] - buffers.vertex_buffer[v[0]]);
 
-                                buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], (int)(buffers.vertex_count++), -1, -1, -1, -1, (int)vn[0]};
+                                buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], -1, -1, -1, (int)vn[0]};
                             }else{
                                 unsigned int vt[3];
                                 obj >> vt[0];
@@ -592,34 +583,22 @@ int RTX::load(const char *file_path){
                                         vn[0] = buffers.normal_count++;
                                     }
 
-                                    /*
-                                        https://stackoverflow.com/questions/3780493/map-points-between-two-triangles-in-3d-space
-                                        v4 = v1 + (v2 - v1) x (v3 - v1)
-                                        vt4 = vt1 + (vt2 - vt1) x (vt3 - vt1)
-                                    */
-
                                     buffers.vertex_buffer[buffers.vertex_count++] = buffers.vertex_buffer[v[0]] + (buffers.vertex_buffer[v[1]] - buffers.vertex_buffer[v[0]]).cross(buffers.vertex_buffer[v[2]] - buffers.vertex_buffer[v[0]]);
                                     buffers.vertex_buffer[buffers.vertex_count] = buffers.texture_vertex_buffer[vt[0]] + (buffers.texture_vertex_buffer[vt[1]] - buffers.texture_vertex_buffer[vt[0]]).cross(buffers.texture_vertex_buffer[vt[2]] - buffers.texture_vertex_buffer[vt[0]]);
 
-                                    buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], (int)(buffers.vertex_count - 1), (int)vt[0], (int)vt[1], (int)vt[2], (int)(buffers.vertex_count++), (int)vn[0]};
+                                    buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], (int)vt[0], (int)vt[1], (int)vt[2], (int)vn[0]};
                                 }else{
                                     //v/vt
                                     obj >> type >> v[1] >> type >> vt[1] >> type >> v[1] >> type >> vt[2];
 
                                     buffers.normal_buffer[buffers.normal_count] = (buffers.vertex_buffer[v[0]] + buffers.vertex_buffer[v[1]] + buffers.vertex_buffer[v[2]]);
 
-                                    /*
-                                        https://stackoverflow.com/questions/3780493/map-points-between-two-triangles-in-3d-space
-                                        v4 = v1 + (v2 - v1) x (v3 - v1)
-                                        vt4 = vt1 + (vt2 - vt1) x (vt3 - vt1)
-                                    */
-
                                     buffers.vertex_buffer[buffers.vertex_count++] = buffers.vertex_buffer[v[0]] + buffers.normal_buffer[buffers.normal_count];
                                     buffers.vertex_buffer[buffers.vertex_count] = buffers.texture_vertex_buffer[vt[0]] + (buffers.texture_vertex_buffer[vt[1]] - buffers.texture_vertex_buffer[vt[0]]).cross(buffers.texture_vertex_buffer[vt[2]] - buffers.texture_vertex_buffer[vt[0]]);
 
                                     buffers.normal_buffer[buffers.normal_count].normalize();
 
-                                    buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], (int)(buffers.vertex_count - 1), (int)vt[0], (int)vt[1], (int)vt[2], (int)(buffers.vertex_count++), (int)(buffers.normal_count++)};
+                                    buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], (int)vt[0], (int)vt[1], (int)vt[2], (int)(buffers.normal_count++)};
                                 }
                             }
                             break;
@@ -673,6 +652,7 @@ int RTX::load(const char *file_path){
 
         return buffers.model_count - 1;    
     }else{
+        //texture control path
         int width, height, channels;
         unsigned char *img = stbi_load(file_path, &width, &height, &channels, 0);
         
@@ -725,6 +705,7 @@ int RTX::createRenderer(unsigned int model, unsigned int texture){
     buffers.renderer_buffer[buffers.renderer_count] = {
         model,
         texture,
+        //TODO: make transforms work for renderers
         Transform({
             {0, 0, 0},
             {1, 0, 0, 0},

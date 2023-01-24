@@ -72,16 +72,26 @@ namespace RTX{
         int v1;
         int v2;
         int v3;
-        int v4;
 
         int vt1;
         int vt2;
         int vt3;
-        int vt4;
 
         int vn;
 
         __host__ __device__ Face& operator = (const int array[3]);
+    };
+
+    struct PrecomputedFace{
+        int face;
+
+        Vertex v1;
+        Vertex v2;
+        Vertex v3;
+
+        Vertex vn;
+
+        __host__ __device__ PrecomputedFace& operator = (const Face face);
     };
 
     struct Transform{
