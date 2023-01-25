@@ -481,8 +481,13 @@ int RTX::load(const char *file_path){
                                 std::cout << "Too many vertices: " << buffers.vertex_count << std::endl;
                                 break;
                             }
+
+                            while(obj.peek() == ' ') obj >> type;
+
                             obj >> x >> type >> y >> type >> z;
+
                             buffers.vertex_buffer[buffers.vertex_count++] = {x, y, z};
+                            
                             break;
                         case 'n':
                             if(buffers.normal_count >= buffers.max_normal_count){
@@ -490,8 +495,13 @@ int RTX::load(const char *file_path){
                                 std::cout << "Too many normals: " << buffers.normal_count << std::endl;
                                 break;
                             }
-                            obj >> type >> x >> type >> y >> type >> z;
+
+                            while(obj.peek() == ' ') obj >> type;
+
+                            obj >> x >> type >> y >> type >> z;
+
                             buffers.normal_buffer[buffers.normal_count++] = {x, y, z};
+
                             break;
                         case 't':
                             if(buffers.texture_vertex_count >= buffers.max_texture_vertex_count){
@@ -499,13 +509,19 @@ int RTX::load(const char *file_path){
                                 std::cout << "Too many texture vertices: " << buffers.texture_vertex_count << std::endl;
                                 break;
                             }
-                            obj >> type >> x >> type >> y;
+
+                            while(obj.peek() == ' ') obj >> type;
+
+                            obj >> x >> type >> y;
+                            
                             if(obj.peek() == '\n'){
                                 z = 0;
                             }else{
                                 obj >> type >> z;
                             }
+
                             buffers.texture_vertex_buffer[buffers.texture_vertex_count++] = {x, y, z};
+
                             break;
                     }
                     break;
@@ -515,11 +531,17 @@ int RTX::load(const char *file_path){
                         std::cout << "Too many faces: " << buffers.face_count << std::endl;
                         break;
                     }
+
+                    //TODO: work with quads+
                     unsigned int v[3];
                     obj >> type >> v[0] >> type;
                     switch(type){
                         case ' ':
+
+                            while(obj.peek() == ' ') obj >> type;
+
                             obj >> v[1] >> type >> v[2];
+
                             v[0]--;
                             v[1]--;
                             v[2]--;
@@ -531,13 +553,17 @@ int RTX::load(const char *file_path){
                             buffers.normal_buffer[buffers.normal_count].normalize();
 
                             buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], -1, -1, -1, (int)(buffers.normal_count++)};
+                            
                             break;
                         case '/':
                             if(obj.peek() == '/'){
+
+                                while(obj.peek() == ' ') obj >> type;
+
                                 //v//vn
                                 unsigned int vn[3];
 
-                                obj >> type >> vn[0] >> type >> v[1] >> type >> type >> vn[1] >> type >> v[2] >> type >> type >> vn[2];
+                                obj >> vn[0] >> type >> v[1] >> type >> type >> vn[1] >> type >> v[2] >> type >> type >> vn[2];
                                 
                                 v[0]--;
                                 v[1]--;
@@ -557,8 +583,13 @@ int RTX::load(const char *file_path){
 
                                 buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], -1, -1, -1, (int)vn[0]};
                             }else{
+
+                                while(obj.peek() == ' ') obj >> type;
+
                                 unsigned int vt[3];
+
                                 obj >> vt[0];
+                                
                                 if(obj.peek() == '/'){
                                     //v/vt/vn
                                     unsigned int vn[3];
@@ -589,9 +620,17 @@ int RTX::load(const char *file_path){
                                     buffers.face_buffer[buffers.face_count++] = {(int)v[0], (int)v[1], (int)v[2], (int)vt[0], (int)vt[1], (int)vt[2], (int)vn[0]};
                                 }else{
                                     //v/vt
-                                    obj >> type >> v[1] >> type >> vt[1] >> type >> v[1] >> type >> vt[2];
+                                    obj >> type >> v[1] >> type >> vt[1] >> type >> v[2] >> type >> vt[2];
+                                    
+                                    v[0]--;
+                                    v[1]--;
+                                    v[2]--;
 
-                                    buffers.normal_buffer[buffers.normal_count] = (buffers.vertex_buffer[v[0]] + buffers.vertex_buffer[v[1]] + buffers.vertex_buffer[v[2]]);
+                                    vt[0]--;
+                                    vt[1]--;
+                                    vt[2]--;
+
+                                    buffers.normal_buffer[buffers.normal_count] = (buffers.vertex_buffer[v[1]] - buffers.vertex_buffer[v[0]]).cross(buffers.vertex_buffer[v[2]] - buffers.vertex_buffer[v[0]]);
 
                                     buffers.vertex_buffer[buffers.vertex_count++] = buffers.vertex_buffer[v[0]] + buffers.normal_buffer[buffers.normal_count];
                                     buffers.vertex_buffer[buffers.vertex_count] = buffers.texture_vertex_buffer[vt[0]] + (buffers.texture_vertex_buffer[vt[1]] - buffers.texture_vertex_buffer[vt[0]]).cross(buffers.texture_vertex_buffer[vt[2]] - buffers.texture_vertex_buffer[vt[0]]);
@@ -681,6 +720,10 @@ int RTX::load(const char *file_path){
 
 #define PI 3.14159265
 int RTX::createCamera(){
+    if(buffers.max_camera_count == buffers.camera_count){
+        return -1;
+    }
+
     buffers.camera_buffer[buffers.camera_count] = {
         {0, 0, -10},
         {1, 0, 0, 0},

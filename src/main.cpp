@@ -16,6 +16,7 @@
 
 #define PEE_DEBUG
 
+int camera;
 int focused = 0;
 
 int main(int argc, char** argv){
@@ -25,11 +26,12 @@ int main(int argc, char** argv){
     pee::createBuffers(2);
     pee::setKernel(test_kernel);
 
-    RTX::makeBuffers(64, 64, 64, 64, 1, 1, 1, 1);
+    RTX::makeBuffers(65536, 65536, 65536, 65536, 1, 1, 1, 1);
 
-    RTX::createRenderer(RTX::load("obj/cube.obj"), RTX::load("textures/crate.jpg"));
+    //https://free3d.com/3d-model/cat-v1--522281.html
+    RTX::createRenderer(RTX::load("obj/obamium.obj"), RTX::load("textures/obamium.png"));
 
-    RTX::createCamera();
+    camera = RTX::createCamera();
 
     pee::setUserPointer((void *)RTX::d_buffers);
 
@@ -63,7 +65,7 @@ int main(int argc, char** argv){
                     break;
             }
 
-            RTX::updateCamera(0);
+            RTX::updateCamera(camera);
 
             pee::requestRedisplay();
         }
@@ -107,7 +109,7 @@ int main(int argc, char** argv){
 
             just_warped = 1;
 
-            RTX::updateCamera(0);
+            RTX::updateCamera(camera);
 
             glutWarpPointer(pee::width * 0.5, pee::height * 0.5);
             

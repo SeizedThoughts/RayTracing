@@ -171,6 +171,9 @@ __device__ inline void draw(uchar4 *frame, const unsigned int idx, const unsigne
         float mapped_x = (vtu.x * u) + (vtv.x * v) + (vtw.x * w) + vt1.x;
         float mapped_y = (vtu.y * u) + (vtv.y * v) + (vtw.y * w) + vt1.y;
 
+        mapped_x -= (int)mapped_x;
+        mapped_y -= (int)mapped_y;
+
         if(mapped_x < 1 && mapped_x > 0 && mapped_y < 1 && mapped_y > 0){
             unsigned int tm = (texture * buffers.texture_size * buffers.texture_size) + (buffers.texture_size * (unsigned int)(buffers.texture_size * mapped_y)) + (unsigned int)(buffers.texture_size * mapped_x);
 
