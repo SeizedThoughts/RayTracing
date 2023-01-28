@@ -15,8 +15,6 @@ __device__ inline void printVertex(Vertex vertex){
 }
 
 __device__ inline void printBuffers(Buffers buffers){
-    printf("texture_size: %d\n", buffers.texture_size);
-
     printf("vertex_count: %d\n", buffers.vertex_count);
     printf("normal_count: %d\n", buffers.normal_count);
     printf("texture_vertex_count: %d\n", buffers.texture_vertex_count);
@@ -78,7 +76,7 @@ __device__ inline void draw(uchar4 *frame, const unsigned int idx, const unsigne
     Camera camera = buffers.camera_buffer[0];
     Vertex point = camera.getPoint(width, height, x, y);
     
-    unsigned int texture;
+    unsigned int texture_id;
     unsigned int vertices[7];
     float closest = -1;
     for(unsigned int i = 0; i < buffers.renderer_count; i++){
@@ -131,7 +129,7 @@ __device__ inline void draw(uchar4 *frame, const unsigned int idx, const unsigne
 
                     vertices[6] = model.normal_start + face.vn;
 
-                    texture = renderer.texture;
+                    texture_id = renderer.texture;
                 }
             }
         }
@@ -175,9 +173,11 @@ __device__ inline void draw(uchar4 *frame, const unsigned int idx, const unsigne
         mapped_y -= (int)mapped_y;
 
         if(mapped_x < 1 && mapped_x > 0 && mapped_y < 1 && mapped_y > 0){
-            unsigned int tm = (texture * buffers.texture_size * buffers.texture_size) + (buffers.texture_size * (unsigned int)(buffers.texture_size * mapped_y)) + (unsigned int)(buffers.texture_size * mapped_x);
+            Texture texture = buffers.texture_buffer[texture_id];
 
-            frame[idx] = buffers.texture_buffer[tm];
+            unsigned int tm = (texture.width * (unsigned int)(texture.height * mapped_y)) + (unsigned int)(texture.width * mapped_x);
+
+            frame[idx] = texture.pixel_buffer[tm];
         }
     }else{
         frame[idx].x = point.x * 255;

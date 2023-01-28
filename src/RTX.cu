@@ -294,6 +294,44 @@ __host__ __device__ RTX::Face& RTX::Face::operator = (const int array[3]){
     return *this;
 }
 
+RTX::Texture::Texture(const unsigned int i_width, const unsigned int i_height, const unsigned char *img, const unsigned int channels){
+    width = i_width;
+    height = i_height;
+
+    pixel_buffer = (uchar4*)malloc(width * height * sizeof(uchar4));
+    
+    for(unsigned int y = 0; y < height; y++){
+        for(unsigned int x = 0; x < width; x++){
+            unsigned int i = (y * width) + x;
+            pixel_buffer[i].x = img[(i * channels)];
+            pixel_buffer[i].y = img[(i * channels) + 1];
+            pixel_buffer[i].z = img[(i * channels) + 2];
+
+            switch(channels){
+                case 4:
+                    pixel_buffer[i].w = img[(i * channels) + 2];
+                    break;
+                default:
+                    pixel_buffer[i].w = 255;
+                    break;
+            }
+        }
+    }
+}
+
+RTX::Texture::Texture(const unsigned int i_width, const unsigned int i_height, const unsigned char *img){    
+    Texture(i_width, i_height, img, 3);
+}
+
+__host__ __device__ RTX::Texture& RTX::Texture::operator = (const RTX::Texture &texture){
+    width = texture.width;
+    height = texture.height;
+
+    pixel_buffer = texture.pixel_buffer;
+
+    return *this;
+}
+
 __host__ __device__ RTX::Vertex RTX::Transform::transform(const RTX::Vertex &vert) const{
     Vertex point = Vertex({
         vert.x * scale.x,
@@ -351,6 +389,12 @@ std::ostream& operator << (std::ostream &os, const RTX::Face &face){
     return os;
 }
 
+std::ostream& operator << (std::ostream &os, const RTX::Texture &texture){
+    os << "(" << texture.width << ", " << texture.height << ")";
+
+    return os;
+}
+
 RTX::Buffers RTX::buffers;
 RTX::Buffers *RTX::d_buffers;
 RTX::Vertex *d_vertex_buffer;
@@ -360,7 +404,8 @@ RTX::Face *d_face_buffer;
 RTX::Camera *d_camera_buffer;
 RTX::Model *d_model_buffer;
 RTX::Renderer *d_renderer_buffer;
-uchar4 *d_texture_buffer;
+RTX::Texture *d_texture_buffer;
+RTX::Texture *textures_d;
 
 void RTX::makeBuffers(
     unsigned int max_vertex_count,
@@ -374,8 +419,6 @@ void RTX::makeBuffers(
 ){
     //TODO: add support for internally managed memory
     //i believe that this will only be needed for vertices
-    buffers.texture_size = 512;
-
     buffers.vertex_count = 0;
     buffers.normal_count = 0;
     buffers.texture_vertex_count = 0;
@@ -400,12 +443,12 @@ void RTX::makeBuffers(
     buffers.face_buffer = (Face*)malloc(buffers.max_face_count * sizeof(Face));
     buffers.camera_buffer = (Camera*)malloc(buffers.max_camera_count * sizeof(Camera));
     buffers.model_buffer = (Model*)malloc(buffers.max_model_count * sizeof(Model));
-    buffers.texture_buffer = (uchar4*)malloc(buffers.max_texture_count * buffers.texture_size * buffers.texture_size * sizeof(uchar4));
+    buffers.texture_buffer = (Texture*)malloc(buffers.max_texture_count * sizeof(Texture));
     buffers.renderer_buffer = (Renderer*)malloc(buffers.max_renderer_count * sizeof(Renderer));
 
-    cuda(Malloc((void**)&d_buffers, 1 * sizeof(Buffers)));
+    textures_d = (Texture*)malloc(buffers.max_texture_count * sizeof(Texture));
 
-    cuda(Memcpy((void*)&d_buffers->texture_size, (void*)&buffers.texture_size, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
+    cuda(Malloc((void**)&d_buffers, 1 * sizeof(Buffers)));
 
     cuda(Memcpy((void*)&d_buffers->vertex_count, (void*)&buffers.vertex_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->normal_count, (void*)&buffers.normal_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
@@ -431,7 +474,7 @@ void RTX::makeBuffers(
     cuda(Malloc((void**)&d_face_buffer, buffers.max_face_count * sizeof(Face)));
     cuda(Malloc((void**)&d_camera_buffer, buffers.max_camera_count * sizeof(Camera)));
     cuda(Malloc((void**)&d_model_buffer, buffers.max_model_count * sizeof(Model)));
-    cuda(Malloc((void**)&d_texture_buffer, buffers.max_texture_count * buffers.texture_size * buffers.texture_size * sizeof(uchar4)));
+    cuda(Malloc((void**)&d_texture_buffer, buffers.max_texture_count * sizeof(Texture)));
     cuda(Malloc((void**)&d_renderer_buffer, buffers.max_renderer_count * sizeof(Renderer)));
 
     cuda(Memcpy((void*)&d_buffers->vertex_buffer, (void*)&d_vertex_buffer, 1 * sizeof(Vertex*), cudaMemcpyHostToDevice));
@@ -440,7 +483,7 @@ void RTX::makeBuffers(
     cuda(Memcpy((void*)&d_buffers->face_buffer, (void*)&d_face_buffer, 1 * sizeof(Face*), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->camera_buffer, (void*)&d_camera_buffer, 1 * sizeof(Camera*), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->model_buffer, (void*)&d_model_buffer, 1 * sizeof(Model*), cudaMemcpyHostToDevice));
-    cuda(Memcpy((void*)&d_buffers->texture_buffer, (void*)&d_texture_buffer, 1 * sizeof(uchar4*), cudaMemcpyHostToDevice));
+    cuda(Memcpy((void*)&d_buffers->texture_buffer, (void*)&d_texture_buffer, 1 * sizeof(Texture*), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->renderer_buffer, (void*)&d_renderer_buffer, 1 * sizeof(Renderer*), cudaMemcpyHostToDevice));
 }
 
@@ -695,20 +738,34 @@ int RTX::load(const char *file_path){
         int width, height, channels;
         unsigned char *img = stbi_load(file_path, &width, &height, &channels, 0);
         
-        if(img == NULL) {
-            printf("Error in loading the image\n");
+        if(img == NULL){
+            std::cout << "Error in loading the image" << std::endl;
             return -1;
         }
-        
-        uchar4 *loc = &buffers.texture_buffer[buffers.texture_count * buffers.texture_size * buffers.texture_size];
-        for(unsigned int i = 0; i < buffers.texture_size * buffers.texture_size; i++){
-            loc[i].x = img[i * channels];
-            loc[i].y = img[i * channels + 1];
-            loc[i].z = img[i * channels + 2];
-            loc[i].w = 255;
-        }
 
-        cuda(Memcpy((void*)&d_texture_buffer[buffers.texture_count * buffers.texture_size * buffers.texture_size], (void*)loc, buffers.texture_size * buffers.texture_size * sizeof(uchar4), cudaMemcpyHostToDevice));
+
+        /*
+            d_textures
+            textures_d
+        */
+        
+        buffers.texture_buffer[buffers.texture_count] = Texture(width, height, img, channels);
+
+        Texture texture = buffers.texture_buffer[buffers.texture_count];
+
+        textures_d[buffers.texture_count] = texture;
+        
+        Texture texture_d = textures_d[buffers.texture_count];
+
+        uchar4 *d_pixel_buffer;
+
+        cuda(Malloc((void**)&d_pixel_buffer, width * height * sizeof(uchar4)));
+
+        texture_d.pixel_buffer = d_pixel_buffer;
+
+        cuda(Memcpy((void*)d_pixel_buffer, (void*)texture.pixel_buffer, width * height * sizeof(uchar4), cudaMemcpyHostToDevice))
+
+        cuda(Memcpy((void*)&d_texture_buffer[buffers.texture_count], (void*)&texture_d, sizeof(Texture), cudaMemcpyHostToDevice));
 
         buffers.texture_count++;
 
