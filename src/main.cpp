@@ -29,7 +29,7 @@ int main(int argc, char** argv){
     RTX::makeBuffers(65536, 65536, 65536, 65536, 1, 1, 1, 1);
 
     //https://free3d.com/3d-model/cat-v1--522281.html
-    RTX::createRenderer(RTX::load("obj/obamium.obj"), RTX::load("textures/obamium.png"));
+    RTX::createRenderer(RTX::load("obj/obamium.obj"), RTX::load("textures/size_test.jpg"));
 
     camera = RTX::createCamera();
 

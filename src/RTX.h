@@ -82,6 +82,19 @@ namespace RTX{
         __host__ __device__ Face& operator = (const int array[3]);
     };
 
+    struct Texture{
+        unsigned int width;
+        unsigned int height;
+
+        uchar4 *pixel_buffer;
+
+        Texture(const unsigned int i_width, const unsigned int i_height, const unsigned char *img, const unsigned int channels);
+
+        Texture(const unsigned int i_width, const unsigned int i_height, const unsigned char *img);
+
+        __host__ __device__ Texture& operator = (const Texture &texture);
+    };
+
     struct PrecomputedFace{
         int face;
 
@@ -132,8 +145,6 @@ namespace RTX{
     };
 
     struct Buffers{
-        unsigned int texture_size;
-
         unsigned int vertex_count;
         unsigned int normal_count;
         unsigned int texture_vertex_count;
@@ -158,7 +169,7 @@ namespace RTX{
         Face *face_buffer;
         Camera *camera_buffer;
         Model *model_buffer;
-        uchar4 *texture_buffer;
+        Texture *texture_buffer;
         Renderer *renderer_buffer;
     };
 
@@ -191,3 +202,5 @@ std::ostream& operator << (std::ostream &os, const RTX::Vertex &vert);
 std::ostream& operator << (std::ostream &os, const RTX::Quaternion &quat);
 
 std::ostream& operator << (std::ostream &os, const RTX::Face &face);
+
+std::ostream& operator << (std::ostream &os, const RTX::Texture &texture);
