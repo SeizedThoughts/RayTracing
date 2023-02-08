@@ -26,10 +26,14 @@ int main(int argc, char** argv){
     pee::createBuffers(2);
     pee::setKernel(test_kernel);
 
-    RTX::makeBuffers(65536, 65536, 65536, 65536, 1, 1, 1, 1);
+    RTX::makeBuffers(65536, 65536, 65536, 65536, 1, 1, 1, 1, 1);
 
     //https://free3d.com/3d-model/cat-v1--522281.html
-    RTX::createRenderer(RTX::load("obj/obamium.obj"), RTX::load("textures/size_test.jpg"));
+    RTX::createRenderer(RTX::load("obj/obamium.obj"), RTX::load("textures/obamium.png"), RTX::push({
+        {0, 0, 0},
+        {1, 0, 0, 0},
+        {1, 1, 1}
+    }));
 
     camera = RTX::createCamera();
 

@@ -15,7 +15,7 @@
 //TODO: remove
 inline cudaError_t cuda_assert(const cudaError_t code, const char* const file, const unsigned int line){
     if(code != cudaSuccess){
-        std::cout << "CUDA error \"" << cudaGetErrorString(code) << "\" (" << code << ") on line " << line << " in " << file << std::endl;
+        std::cout << "CUDA error \"" << cudaGetErrorString(code) << "\" (" << code << "): " << file << ":" << line << std::endl;
         exit(code);
     }
 
@@ -332,6 +332,14 @@ __host__ __device__ RTX::Texture& RTX::Texture::operator = (const RTX::Texture &
     return *this;
 }
 
+__host__ __device__ RTX::Transform& RTX::Transform::operator = (const RTX::Transform &transform){
+    position = transform.position;
+    rotation = transform.rotation;
+    scale = transform.scale;
+
+    return *this;
+}
+
 __host__ __device__ RTX::Vertex RTX::Transform::transform(const RTX::Vertex &vert) const{
     Vertex point = Vertex({
         vert.x * scale.x,
@@ -401,21 +409,23 @@ RTX::Vertex *d_vertex_buffer;
 RTX::Vertex *d_normal_buffer;
 RTX::Vertex *d_texture_vertex_buffer;
 RTX::Face *d_face_buffer;
-RTX::Camera *d_camera_buffer;
+RTX::Transform *d_transform_buffer;
 RTX::Model *d_model_buffer;
 RTX::Renderer *d_renderer_buffer;
 RTX::Texture *d_texture_buffer;
 RTX::Texture *textures_d;
+RTX::Camera *d_camera_buffer;
 
 void RTX::makeBuffers(
     unsigned int max_vertex_count,
     unsigned int max_normal_count,
     unsigned int max_texture_vertex_count,
     unsigned int max_face_count,
-    unsigned int max_camera_count,
+    unsigned int max_transform_count,
     unsigned int max_model_count,
     unsigned int max_texture_count,
-    unsigned int max_renderer_count
+    unsigned int max_renderer_count,
+    unsigned int max_camera_count
 ){
     //TODO: add support for internally managed memory
     //i believe that this will only be needed for vertices
@@ -423,28 +433,31 @@ void RTX::makeBuffers(
     buffers.normal_count = 0;
     buffers.texture_vertex_count = 0;
     buffers.face_count = 0;
-    buffers.camera_count = 0;
+    buffers.transform_count = 0;
     buffers.model_count = 0;
     buffers.texture_count = 0;
     buffers.renderer_count = 0;
+    buffers.camera_count = 0;
 
     buffers.max_vertex_count = max_vertex_count;
     buffers.max_normal_count = max_normal_count;
     buffers.max_texture_vertex_count = max_texture_vertex_count;
     buffers.max_face_count = max_face_count;
-    buffers.max_camera_count = max_camera_count;
+    buffers.max_transform_count = max_transform_count;
     buffers.max_model_count = max_model_count;
     buffers.max_texture_count = max_texture_count;
     buffers.max_renderer_count = max_renderer_count;
+    buffers.max_camera_count = max_camera_count;
 
     buffers.vertex_buffer = (Vertex*)malloc(buffers.max_vertex_count * sizeof(Vertex));
     buffers.normal_buffer = (Vertex*)malloc(buffers.max_normal_count * sizeof(Vertex));
     buffers.texture_vertex_buffer = (Vertex*)malloc(buffers.max_texture_vertex_count * sizeof(Vertex));
     buffers.face_buffer = (Face*)malloc(buffers.max_face_count * sizeof(Face));
-    buffers.camera_buffer = (Camera*)malloc(buffers.max_camera_count * sizeof(Camera));
+    buffers.transform_buffer = (Transform*)malloc(buffers.max_transform_count * sizeof(Transform));
     buffers.model_buffer = (Model*)malloc(buffers.max_model_count * sizeof(Model));
     buffers.texture_buffer = (Texture*)malloc(buffers.max_texture_count * sizeof(Texture));
     buffers.renderer_buffer = (Renderer*)malloc(buffers.max_renderer_count * sizeof(Renderer));
+    buffers.camera_buffer = (Camera*)malloc(buffers.max_camera_count * sizeof(Camera));
 
     textures_d = (Texture*)malloc(buffers.max_texture_count * sizeof(Texture));
 
@@ -454,37 +467,41 @@ void RTX::makeBuffers(
     cuda(Memcpy((void*)&d_buffers->normal_count, (void*)&buffers.normal_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->texture_vertex_count, (void*)&buffers.texture_vertex_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->face_count, (void*)&buffers.face_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
-    cuda(Memcpy((void*)&d_buffers->camera_count, (void*)&buffers.camera_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
+    cuda(Memcpy((void*)&d_buffers->transform_count, (void*)&buffers.transform_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->model_count, (void*)&buffers.model_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->texture_count, (void*)&buffers.texture_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->renderer_count, (void*)&buffers.renderer_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
+    cuda(Memcpy((void*)&d_buffers->camera_count, (void*)&buffers.camera_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
 
     cuda(Memcpy((void*)&d_buffers->max_vertex_count, (void*)&buffers.max_vertex_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->max_normal_count, (void*)&buffers.max_normal_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->max_texture_vertex_count, (void*)&buffers.max_texture_vertex_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->max_face_count, (void*)&buffers.max_face_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
-    cuda(Memcpy((void*)&d_buffers->max_camera_count, (void*)&buffers.max_camera_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
+    cuda(Memcpy((void*)&d_buffers->max_transform_count, (void*)&buffers.max_transform_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->max_model_count, (void*)&buffers.max_model_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->max_texture_count, (void*)&buffers.max_texture_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->max_renderer_count, (void*)&buffers.max_renderer_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
+    cuda(Memcpy((void*)&d_buffers->max_camera_count, (void*)&buffers.max_camera_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
 
     cuda(Malloc((void**)&d_vertex_buffer, buffers.max_vertex_count * sizeof(Vertex)));
     cuda(Malloc((void**)&d_normal_buffer, buffers.max_normal_count * sizeof(Vertex)));
     cuda(Malloc((void**)&d_texture_vertex_buffer, buffers.max_texture_vertex_count * sizeof(Vertex)));
     cuda(Malloc((void**)&d_face_buffer, buffers.max_face_count * sizeof(Face)));
-    cuda(Malloc((void**)&d_camera_buffer, buffers.max_camera_count * sizeof(Camera)));
+    cuda(Malloc((void**)&d_transform_buffer, buffers.max_transform_count * sizeof(Transform)));
     cuda(Malloc((void**)&d_model_buffer, buffers.max_model_count * sizeof(Model)));
     cuda(Malloc((void**)&d_texture_buffer, buffers.max_texture_count * sizeof(Texture)));
     cuda(Malloc((void**)&d_renderer_buffer, buffers.max_renderer_count * sizeof(Renderer)));
+    cuda(Malloc((void**)&d_camera_buffer, buffers.max_camera_count * sizeof(Camera)));
 
     cuda(Memcpy((void*)&d_buffers->vertex_buffer, (void*)&d_vertex_buffer, 1 * sizeof(Vertex*), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->normal_buffer, (void*)&d_normal_buffer, 1 * sizeof(Vertex*), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->texture_vertex_buffer, (void*)&d_texture_vertex_buffer, 1 * sizeof(Vertex*), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->face_buffer, (void*)&d_face_buffer, 1 * sizeof(Face*), cudaMemcpyHostToDevice));
-    cuda(Memcpy((void*)&d_buffers->camera_buffer, (void*)&d_camera_buffer, 1 * sizeof(Camera*), cudaMemcpyHostToDevice));
+    cuda(Memcpy((void*)&d_buffers->transform_buffer, (void*)&d_transform_buffer, 1 * sizeof(Transform*), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->model_buffer, (void*)&d_model_buffer, 1 * sizeof(Model*), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->texture_buffer, (void*)&d_texture_buffer, 1 * sizeof(Texture*), cudaMemcpyHostToDevice));
     cuda(Memcpy((void*)&d_buffers->renderer_buffer, (void*)&d_renderer_buffer, 1 * sizeof(Renderer*), cudaMemcpyHostToDevice));
+    cuda(Memcpy((void*)&d_buffers->camera_buffer, (void*)&d_camera_buffer, 1 * sizeof(Camera*), cudaMemcpyHostToDevice));
 }
 
 //model, texture map, material map, maybe normal map
@@ -801,17 +818,22 @@ void RTX::updateCamera(unsigned int camera){
     cuda(Memcpy((void*)&d_camera_buffer[camera], (void*)&buffers.camera_buffer[camera], 1 * sizeof(Camera), cudaMemcpyHostToDevice));
 }
 
-int RTX::createRenderer(unsigned int model, unsigned int texture){
-    buffers.renderer_buffer[buffers.renderer_count] = {
-        model,
-        texture,
-        //TODO: make transforms work for renderers
-        Transform({
-            {0, 0, 0},
-            {1, 0, 0, 0},
-            {1, 1, 1}
-        })
-    };
+int RTX::push(const RTX::Transform transform){
+    buffers.transform_buffer[buffers.transform_count] = transform;
+    
+    cuda(Memcpy((void*)&d_transform_buffer[buffers.transform_count], (void*)&buffers.transform_buffer[buffers.transform_count], 1 * sizeof(Transform), cudaMemcpyHostToDevice));
+
+    buffers.transform_count++;
+
+    cuda(Memcpy((void*)&d_buffers->transform_count, (void*)&buffers.transform_count, 1 * sizeof(unsigned int), cudaMemcpyHostToDevice));
+
+    return buffers.transform_count - 1;
+};
+
+int RTX::createRenderer(unsigned int model, unsigned int texture, unsigned int transform){
+    buffers.renderer_buffer[buffers.renderer_count] = {model, texture, transform};
+
+    //TODO: make transforms work for renderers
 
     cuda(Memcpy((void*)&d_renderer_buffer[buffers.renderer_count], (void*)&buffers.renderer_buffer[buffers.renderer_count], 1 * sizeof(Renderer), cudaMemcpyHostToDevice));
 
