@@ -95,18 +95,6 @@ namespace RTX{
         __host__ __device__ Texture& operator = (const Texture &texture);
     };
 
-    struct PrecomputedFace{
-        int face;
-
-        Vertex v1;
-        Vertex v2;
-        Vertex v3;
-
-        Vertex vn;
-
-        __host__ __device__ PrecomputedFace& operator = (const Face face);
-    };
-
     struct Transform{
         Vertex position;
         Quaternion rotation;
@@ -115,6 +103,8 @@ namespace RTX{
         __host__ __device__ Vertex transform(const Vertex &vert) const;
 
         __host__ __device__ Vertex& transformInPlace(Vertex &vert) const;
+
+        __host__ __device__ Transform& operator = (const Transform &transform);
     };
     
     struct Camera{
@@ -140,8 +130,7 @@ namespace RTX{
     struct Renderer{
         unsigned int model;
         unsigned int texture;
-
-        Transform transform;
+        unsigned int transform;
     };
 
     struct Buffers{
@@ -149,28 +138,64 @@ namespace RTX{
         unsigned int normal_count;
         unsigned int texture_vertex_count;
         unsigned int face_count;
-        unsigned int camera_count;
+        unsigned int transform_count;
         unsigned int model_count;
         unsigned int texture_count;
         unsigned int renderer_count;
+        unsigned int camera_count;
 
         unsigned int max_vertex_count;
         unsigned int max_normal_count;
         unsigned int max_texture_vertex_count;
         unsigned int max_face_count;
-        unsigned int max_camera_count;
+        unsigned int max_transform_count;
         unsigned int max_model_count;
         unsigned int max_texture_count;
         unsigned int max_renderer_count;
+        unsigned int max_camera_count;
         
         Vertex *vertex_buffer;
         Vertex *normal_buffer;
         Vertex *texture_vertex_buffer;
         Face *face_buffer;
-        Camera *camera_buffer;
+        Transform *transform_buffer;
         Model *model_buffer;
         Texture *texture_buffer;
         Renderer *renderer_buffer;
+        Camera *camera_buffer;
+    };
+
+    struct PrecomputedFace{
+        unsigned int v1;
+        unsigned int v2;
+        unsigned int v3;
+
+        Vertex vu;
+        Vertex vv;
+        //vw = vn
+        
+        Vertex vvxvw;
+        Vertex vwxvu;
+        Vertex vuxvv;
+
+        Vertex vtu;
+        Vertex vtv;
+        //vtw = (0, 0, 1)
+
+        Vertex vn;
+    };
+
+    struct PrecomputedBuffers{
+        Vertex *transformed_vertex_buffer;
+        Vertex *transformed_normal_buffer;
+        PrecomputedFace *precomputed_face_buffer;
+
+        int *face_in_region;
+
+        int *renderer_update_flags;
+        int *model_update_flags;
+
+        Buffers data;
     };
 
     extern Buffers buffers;
@@ -181,10 +206,11 @@ namespace RTX{
         unsigned int max_normal_count,
         unsigned int max_texture_vertex_count,
         unsigned int max_face_count,
-        unsigned int max_camera_count,
+        unsigned int max_transform_count, //TODO: is this used for anything other than renderers?
         unsigned int max_model_count,
         unsigned int max_texture_count,
-        unsigned int max_renderer_count
+        unsigned int max_renderer_count,
+        unsigned int max_camera_count
     );
 
     //model, texture map, material map, maybe normal map
@@ -194,7 +220,9 @@ namespace RTX{
 
     void updateCamera(unsigned int camera);
 
-    int createRenderer(unsigned int model, unsigned int texture);
+    int push(Transform transform);
+
+    int createRenderer(unsigned int model, unsigned int texture, unsigned int transform);
 };
 
 std::ostream& operator << (std::ostream &os, const RTX::Vertex &vert);
